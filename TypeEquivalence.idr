@@ -42,8 +42,21 @@ isequiv {a=a} {b=b} f = (g : (b -> a) ** (h : (b -> a) ** ((f . g) ~~ id, (h . f
 
 transitivity_equiv : {f : a -> b} -> {g : b -> c} -> 
                      isequiv f -> isequiv g -> isequiv (g . f)
-transitivity_equiv {f=f} {g=g} (f_inv_l ** (f_inv_r ** (hl, hr))) 
-                               (g_inv_l ** (g_inv_r ** (hl'', hr''))) = (f_inv_l . g_inv_l ** (f_inv_r . g_inv_r ** ?hole))
+transitivity_equiv {a=a} {b=b} {c=c} {f=f} {g=g} (f_inv_r ** (f_inv_l ** (hr, hl))) 
+                                                 (g_inv_r ** (g_inv_l ** (hr'', hl''))) = (f_inv_r . g_inv_r ** (f_inv_l . g_inv_l ** (hr1, hl1)))
+                                                                           where
+                                                                              hl1 : (f_inv_l . g_inv_l . g . f) ~~ id {a=a}
+                                                                              hl1 = \x : a => fmap f_inv_l (hl'' $ f x) :>: (hl x)
+                                                                              --
+                                                                              hr1 : (g . f . f_inv_r . g_inv_r) ~~ id {a=c}
+                                                                              hr1 = \x : c => fmap g (hr $ g_inv_r x) :>: (hr'' x)
+                                                                              --
+                                                                              -- hole1 : id ~~ id {a=b}
+                                                                              -- auxl1 : id ~~ id {a=b}
+                                                                              -- auxl1 = compose hole1 hole1 -- can't figure out the problem
+                                                                              -- hl1 = (((reflexivity f_inv_l) `compose` hl'') `compose` (reflexivity f)) `transitivity` ?hole
+                                                                           	  -- g-1 . g ~~ id  and f_inv_l ~~ f_inv_l and f ~~ f
+                                                                           	  -- => f_inv_l . g_inv_l . g . f ~~ f_inv_l . f ~~ id 
 
 
 -- Three essential properties of "isequiv"
@@ -70,14 +83,43 @@ isequiv_to_qinv {a=a} {b=b} {f=f} (g ** (h ** (h1, h2))) = (h . f . g ** (h1'', 
 id_equivalence : {a : Type} -> isequiv (id {a=a})
 id_equivalence = qinv_to_isequiv (id_invertible) 
 
--- -- All inhabitants of isequiv(f) are equal
 
+
+
+-- -- All inhabitants of isequiv(f) are equal
+all_inhabitant_equal : (p : isequiv f) -> (q : isequiv f) -> p :=: q
+-- to implement: not sure how to prove this?
 
 -- -- type equivalence
 infix 10 :~: 
 (:~:) : Type -> Type -> Type 
 (:~:) a b = (f : (a -> b) ** isequiv f)
 
+qinv_to_equiv : (f : a -> b) -> (qinv f) -> a :~: b
+qinv_to_equiv f qinv_f = (f ** qinv_to_isequiv qinv_f)
+
+-- -- destructors of identity types
+pair_id_destructor : {x1 : a} -> {y1 : b} -> {x2 : a} -> {y2 : b} -> 
+                     ((x1, y1) :=: (x2, y2)) :~: (x1 :=: x2, y1 :=: y2)
+pair_id_destructor {a=a} {b=b} {x1=x1} {y1=y1} {x2=x2} {y2=y2} = qinv_to_equiv unpair (pair ** (h1, h2))
+                                                     where
+                                                        unpair : ((x1, y1) :=: (x2, y2)) -> (x1 :=: x2, y1 :=: y2)
+                                                        unpair = uncons_pair_equ x1 y1 x2 y2
+                                                        pair : (x1 :=: x2, y1 :=: y2) -> ((x1, y1) :=: (x2, y2)) 
+                                                        pair = \(p1, p2) => cons_pair_equ x1 y1 x2 y2 p1 p2
+                                                        -- This will be unbearably painful to write
+                                                        h1 : (unpair . pair) ~~ id {a=(x1 :=: x2, y1 :=: y2)}
+                                                        h2 : (pair . unpair) ~~ id {a=((x1, y1) :=: (x2, y2))}
+dep_pair_id_destructor : {p : a -> Type} ->
+                         {x1 : a} -> {x2 : a} -> {y1 : p x1} -> {y2 : p x2} -> 
+                         ((x1 ** y1) :=: (x2 ** y2)) :~: (p : (x1 :=: x2) ** transport p y1 :=: y2) 
+dep_pair_id_destructor {p=p} {x1=x1} {x2=x2} {y1=y1} {y2=y2} = qinv_to_equiv un_dep_pair (dep_pair ** (h1, h2))
+                                                                 where
+                                                                    dep_pair : (p : (x1 :=: x2) ** transport p y1 :=: y2) -> ((x1 ** y1) :=: (x2 ** y2))
+                                                                    dep_pair (p1 ** p2) = cons_dpair_equ x1 y1 x2 y2 p1 p2
+                                                                    un_dep_pair : ((x1 ** y1) :=: (x2 ** y2)) -> (p : (x1 :=: x2) ** transport p y1 :=: y2)
+                                                                    h1 : (un_dep_pair . dep_pair) ~~ id {a=(p : (x1 :=: x2) ** transport p y1 :=: y2)}
+                                                                    h2 : (dep_pair . un_dep_pair) ~~ id {a=(x1 ** y1) :=: (x2 ** y2)}
 -- -- inject an equivalence
 inject : isequiv {a=a} {b=b} f -> a :~: b
 inject {f=f} e = (f ** e)
@@ -107,3 +149,10 @@ rev {a=a} {b=b} (f ** e) =  (g ** e2)
 -- transitivity
 infix 11 :~>: 
 (:~>:) : a :~: b -> b :~: c -> a :~: c
+(:~>:) (f ** e1) (g ** e2) = (g . f ** transitivity_equiv e1 e2)
+
+
+-- finally, the univalence axion
+
+univalence : (a :=: b) :~: (a :~: b)
+-- it's an axiom, no implementation required!
